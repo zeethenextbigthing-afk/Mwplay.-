@@ -1166,15 +1166,39 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
   if(showPay)return(
     <PaymentModal amount={UPLOAD_FEE} amountLabel={UPLOAD_FEE_LABEL} purpose={`Upload "${form.title}"`}
       onSuccess={async txnId=>{
-        const id=genId();
-        toast("Submitting your track…","info");
+        toast("Uploading your track… please wait ⏳","info");
         try{
           const authUserId=await requireAuthUserId(currentUser);
-          // Insert the song row FIRST (instant) so it appears in admin panel immediately
+          const id=genId();
+
+          // Read files into memory WHILE modal is still mounted
+          let audioBuffer=null, coverBlob=null;
+          if(audio){
+            audioBuffer=await audio.arrayBuffer();
+          }
+          if(cover&&cover.startsWith("data:")){
+            coverBlob=dataUrlToBlob(cover);
+          }
+
+          // Upload files to Supabase Storage
+          let audioUrl=null, coverUrl=null;
+          if(isSupabaseReady){
+            if(audioBuffer){
+              const ext=(audio.name.split(".").pop()||"mp3").toLowerCase();
+              const blob=new Blob([audioBuffer],{type:audio.type||"audio/mpeg"});
+              audioUrl=await uploadFile("audio",`${authUserId}/${id}.${ext}`,blob);
+            }
+            if(coverBlob){
+              coverUrl=await uploadFile("covers",`${authUserId}/${id}.jpg`,coverBlob);
+            }
+          }
+
+          // Now insert song row with real URLs
           const song={id,title:form.title,artist:currentUser.name,artistId:authUserId,
             genre:form.genre,plays:0,likes:0,albumName:form.albumName,isExplicit:form.isExplicit,
-            cover:`https://picsum.photos/seed/${id}/300/300`,
-            audioUrl:null,duration:audioDuration?fmtTime(audioDuration):"—",
+            cover:coverUrl||`https://picsum.photos/seed/${id}/300/300`,
+            audioUrl:audioUrl||null,
+            duration:audioDuration?fmtTime(audioDuration):"—",
             durationSecs:audioDuration?Math.round(audioDuration):0,trending:false,
             release:form.release||new Date().toISOString().slice(0,10),
             lyrics:form.lyrics,status:"Pending",paymentRef:txnId,
@@ -1186,26 +1210,8 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
             savedSong=songFromDb(row);
           }
           onUpload(savedSong);
-          toast("Track submitted! Uploading files in background…","success");
+          toast("Track submitted for review! ✅","success");
           onClose();
-          // Upload audio + cover in background AFTER closing modal
-          if(isSupabaseReady&&savedSong.id){
-            const songId=savedSong.id;
-            const coverBlob=cover&&cover.startsWith("data:")?dataUrlToBlob(cover):null;
-            Promise.all([
-              audio?uploadFile("audio",`${authUserId}/${songId}.mp3`,audio).catch(()=>null):Promise.resolve(null),
-              coverBlob?uploadFile("covers",`${authUserId}/${songId}.jpg`,coverBlob).catch(()=>null):Promise.resolve(null),
-            ]).then(([audioUrl,coverUrl])=>{
-              if(!audioUrl&&!coverUrl)return;
-              supabase.rpc('update_song_files',{
-                p_song_id:songId,
-                p_audio_url:audioUrl||null,
-                p_cover:coverUrl||null,
-              }).then(()=>{
-                if(onUpdateSong)onUpdateSong({id:songId,...(audioUrl?{audioUrl}:{}),...(coverUrl?{cover:coverUrl}:{})});
-              }).catch(e=>console.error("Song file update failed:",e));
-            }).catch(e=>console.error("Background upload failed:",e));
-          }
         }catch(e){
           console.error("Upload error:",e);
           toast("Upload failed: "+fullErrMsg(e),"error");
