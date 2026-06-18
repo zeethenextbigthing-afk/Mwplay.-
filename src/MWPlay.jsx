@@ -651,9 +651,10 @@ function AlbumUploadModal({ onClose, currentUser, onAlbumUpload, toast }) {
         for(const job of fileJobs){
           uploadTrackAssets({id:authUserId},job.file,job.cover,job.idHint).then(({audioUrl,coverUrl})=>{
             if(audioUrl||coverUrl){
-              db.adminUpdateSong(job.songId,{
-                ...(audioUrl?{audio_url:audioUrl}:{}),
-                ...(coverUrl?{cover:coverUrl}:{}),
+              supabase.rpc('update_song_files',{
+                p_song_id:job.songId,
+                p_audio_url:audioUrl||null,
+                p_cover:coverUrl||null,
               }).catch(()=>{});
             }
           }).catch(()=>{});
@@ -1196,13 +1197,14 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
               coverBlob?uploadFile("covers",`${authUserId}/${songId}.jpg`,coverBlob).catch(()=>null):Promise.resolve(null),
             ]).then(([audioUrl,coverUrl])=>{
               if(!audioUrl&&!coverUrl)return;
-              supabase.from('songs').update({
-                ...(audioUrl?{audio_url:audioUrl}:{}),
-                ...(coverUrl?{cover:coverUrl}:{}),
-              }).eq('id',songId).then(()=>{
+              supabase.rpc('update_song_files',{
+                p_song_id:songId,
+                p_audio_url:audioUrl||null,
+                p_cover:coverUrl||null,
+              }).then(()=>{
                 if(onUpdateSong)onUpdateSong({id:songId,...(audioUrl?{audioUrl}:{}),...(coverUrl?{cover:coverUrl}:{})});
-              }).catch(()=>{});
-            }).catch(()=>{});
+              }).catch(e=>console.error("Song file update failed:",e));
+            }).catch(e=>console.error("Background upload failed:",e));
           }
         }catch(e){
           console.error("Upload error:",e);
