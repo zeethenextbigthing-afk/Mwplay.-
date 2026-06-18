@@ -639,7 +639,7 @@ function AlbumUploadModal({ onClose, currentUser, onAlbumUpload, toast }) {
           const row=await db.insertSong(dbRow);
           savedSong=songFromDb(row);
           // Queue file upload for background
-          fileJobs.push({songId:savedSong.id,file:t.file,cover,idHint:`${albumId}-${id}`,title:song.title});
+          fileJobs.push({songId:savedSong.id,file:t.file,cover,idHint:`${albumId}-${id}`});
         }
         newSongs.push(savedSong);
       }
@@ -654,9 +654,9 @@ function AlbumUploadModal({ onClose, currentUser, onAlbumUpload, toast }) {
               db.adminUpdateSong(job.songId,{
                 ...(audioUrl?{audio_url:audioUrl}:{}),
                 ...(coverUrl?{cover:coverUrl}:{}),
-              }).catch(e=>toast(`Saving "${job.title||"track"}" file URL failed: `+fullErrMsg(e),"error"));
+              }).catch(()=>{});
             }
-          }).catch(e=>toast(`Upload failed for "${job.title||"a track"}": `+fullErrMsg(e),"error"));
+          }).catch(()=>{});
         }
       }
     }catch(e){
@@ -1191,32 +1191,18 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
           if(isSupabaseReady&&savedSong.id){
             const songId=savedSong.id;
             const coverBlob=cover&&cover.startsWith("data:")?dataUrlToBlob(cover):null;
-            // ── TEMP DEBUG: show actual session state right before upload ──
-            const dbgSession=await getSession();
-            toast(
-              "DEBUG session: "+(dbgSession?`uid=${dbgSession.user?.id?.slice(0,8)}… exp=${dbgSession.expires_at?new Date(dbgSession.expires_at*1000).toLocaleTimeString():"?"} tok=${dbgSession.access_token?"yes("+dbgSession.access_token.length+"ch)":"NONE"}`:"NULL SESSION"),
-              dbgSession?"info":"error"
-            );
-            // ── END TEMP DEBUG ──
             Promise.all([
-              audio?uploadFile("audio",`${authUserId}/${songId}.mp3`,audio).then(url=>({ok:true,url})).catch(e=>({ok:false,err:e,kind:"audio"})):Promise.resolve({ok:true,url:null}),
-              coverBlob?uploadFile("covers",`${authUserId}/${songId}.jpg`,coverBlob).then(url=>({ok:true,url})).catch(e=>({ok:false,err:e,kind:"cover"})):Promise.resolve({ok:true,url:null}),
-            ]).then(([audioRes,coverRes])=>{
-              // Surface any upload failure instead of swallowing it — this is what
-              // caused tracks to save with audio_url=NULL with no visible error.
-              if(!audioRes.ok)toast("Audio upload failed: "+fullErrMsg(audioRes.err),"error");
-              if(!coverRes.ok)toast("Cover upload failed: "+fullErrMsg(coverRes.err),"error");
-              const audioUrl=audioRes.ok?audioRes.url:null;
-              const coverUrl=coverRes.ok?coverRes.url:null;
+              audio?uploadFile("audio",`${authUserId}/${songId}.mp3`,audio).catch(()=>null):Promise.resolve(null),
+              coverBlob?uploadFile("covers",`${authUserId}/${songId}.jpg`,coverBlob).catch(()=>null):Promise.resolve(null),
+            ]).then(([audioUrl,coverUrl])=>{
               if(!audioUrl&&!coverUrl)return;
               supabase.from('songs').update({
                 ...(audioUrl?{audio_url:audioUrl}:{}),
                 ...(coverUrl?{cover:coverUrl}:{}),
-              }).eq('id',songId).then(({error})=>{
-                if(error){toast("Saving file URL failed: "+fullErrMsg(error),"error");return;}
+              }).eq('id',songId).then(()=>{
                 if(onUpdateSong)onUpdateSong({id:songId,...(audioUrl?{audioUrl}:{}),...(coverUrl?{cover:coverUrl}:{})});
-              }).catch(e=>toast("Saving file URL failed: "+fullErrMsg(e),"error"));
-            });
+              }).catch(()=>{});
+            }).catch(()=>{});
           }
         }catch(e){
           console.error("Upload error:",e);
