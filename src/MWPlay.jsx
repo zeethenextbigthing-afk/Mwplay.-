@@ -1191,6 +1191,13 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
           if(isSupabaseReady&&savedSong.id){
             const songId=savedSong.id;
             const coverBlob=cover&&cover.startsWith("data:")?dataUrlToBlob(cover):null;
+            // ── TEMP DEBUG: show actual session state right before upload ──
+            const dbgSession=await getSession();
+            toast(
+              "DEBUG session: "+(dbgSession?`uid=${dbgSession.user?.id?.slice(0,8)}… exp=${dbgSession.expires_at?new Date(dbgSession.expires_at*1000).toLocaleTimeString():"?"} tok=${dbgSession.access_token?"yes("+dbgSession.access_token.length+"ch)":"NONE"}`:"NULL SESSION"),
+              dbgSession?"info":"error"
+            );
+            // ── END TEMP DEBUG ──
             Promise.all([
               audio?uploadFile("audio",`${authUserId}/${songId}.mp3`,audio).then(url=>({ok:true,url})).catch(e=>({ok:false,err:e,kind:"audio"})):Promise.resolve({ok:true,url:null}),
               coverBlob?uploadFile("covers",`${authUserId}/${songId}.jpg`,coverBlob).then(url=>({ok:true,url})).catch(e=>({ok:false,err:e,kind:"cover"})):Promise.resolve({ok:true,url:null}),
