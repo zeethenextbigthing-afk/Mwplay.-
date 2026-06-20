@@ -14,6 +14,7 @@ const T = {
   bg:"#070A10", bg1:"#0B0F1A", bg2:"#0F1420", card:"#0D1220",
   border:"#151D2E", border2:"#1C2840",
   text:"#FFFFFF", sub:"#6B7A99", mute:"#2A3550",
+  gold:"#C8A951", goldSoft:"#E4C679", goldDim:"#C8A95120", goldBorder:"#C8A95150",
 };
 
 const GENRES = [
@@ -1703,7 +1704,7 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
   const totalPlays=artistSongs.reduce((a,s)=>a+s.plays,0);
   const totalLikes=artistSongs.reduce((a,s)=>a+s.likes,0);
   const maxPlays=Math.max(...approved.map(s=>s.plays),1);
-  const sColor={"Approved":T.green,"Pending":T.orange,"Rejected":T.red};
+  const sColor={"Approved":T.green,"Pending":T.gold,"Rejected":T.red};
 
   useEffect(()=>{
     if(tab!=="revenue"||!isSupabaseReady)return;
@@ -1713,42 +1714,65 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
       .then(({data})=>{if(data)setRevenueData(data);}).catch(()=>{});
   },[tab]);
 
+  const TABS=[["overview","Overview"],["uploads","Tracks"],["analytics","Analytics"],["editprofile","Profile"],["verify","Verify"],["revenue","Revenue"]];
+  const recentDownloads=revenueData.slice(0,20);
+
   return(
-    <Modal onClose={onClose} maxWidth={680} padding="0">
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 22px",borderBottom:`1px solid ${T.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <h2 style={{color:T.text,fontFamily:"'Syne',sans-serif",fontSize:17}}>Artist Dashboard</h2>
-          {currentUser.verified&&<span style={{background:`${T.green}22`,color:T.green,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.greenBorder}`}}>✓ VERIFIED</span>}
+    <Modal onClose={onClose} maxWidth={700} padding="0">
+      {/* ── Premium header ─────────────────────────────────────── */}
+      <div style={{position:"relative",padding:"24px 26px 0",background:`linear-gradient(165deg, ${T.bg1} 0%, ${T.bg} 100%)`,borderBottom:`1px solid ${T.border}`}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg, transparent, ${T.gold}, transparent)`}}/>
+        <button onClick={onClose} style={{position:"absolute",top:18,right:22,background:"none",border:"none",color:T.mute,fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+        <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:18}}>
+          <div style={{width:54,height:54,borderRadius:"50%",overflow:"hidden",flexShrink:0,border:`1.5px solid ${T.goldBorder}`,boxShadow:`0 0 0 4px ${T.goldDim}`,display:"flex",alignItems:"center",justifyContent:"center",background:T.bg2,fontFamily:"'Syne',sans-serif",fontSize:19,fontWeight:700,color:T.gold}}>
+            {currentUser.avatar?<img src={currentUser.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:currentUser.name[0].toUpperCase()}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:T.gold,fontSize:10,fontWeight:700,letterSpacing:1.8,marginBottom:4,textTransform:"uppercase"}}>Artist Dashboard</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <h2 style={{color:T.text,fontFamily:"'Syne',sans-serif",fontSize:19,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:260}}>{currentUser.name}</h2>
+              {currentUser.verified&&<span style={{background:T.goldDim,color:T.gold,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.goldBorder}`,flexShrink:0,letterSpacing:.4}}>✓ VERIFIED</span>}
+            </div>
+            <div style={{color:T.sub,fontSize:11,marginTop:2}}>{currentUser.genre||"Artist"}{currentUser.country?` · ${currentUser.country}`:""}</div>
+          </div>
         </div>
-        <button onClick={onClose} style={{background:"none",border:"none",color:T.mute,fontSize:20,cursor:"pointer"}}>✕</button>
+        {/* Tabs */}
+        <div style={{display:"flex",gap:2,overflowX:"auto"}}>
+          {TABS.map(([k,l])=>(
+            <button key={k} style={{whiteSpace:"nowrap",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:tab===k?T.text:T.sub,position:"relative",fontFamily:"'DM Sans',sans-serif",letterSpacing:.2,transition:"color .15s"}} onClick={()=>setTab(k)}>
+              {l}
+              {tab===k&&<div style={{position:"absolute",bottom:0,left:12,right:12,height:2,background:T.gold,borderRadius:2}}/>}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,padding:"0 22px",overflowX:"auto"}}>
-        {[["overview","Overview"],["uploads","Tracks"],["analytics","Analytics"],["editprofile","Profile"],["verify","Verify"],["revenue","💰 Revenue"]].map(([k,l])=>(
-          <button key={k} style={{whiteSpace:"nowrap",padding:"13px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:tab===k?T.blue:T.sub,borderBottom:tab===k?`2px solid ${T.blue}`:"2px solid transparent",marginBottom:-1,fontFamily:"'DM Sans',sans-serif"}} onClick={()=>setTab(k)}>{l}</button>
-        ))}
-      </div>
-      <div style={{padding:"20px 22px",maxHeight:"70vh",overflowY:"auto"}}>
+
+      <div style={{padding:"22px 26px",maxHeight:"66vh",overflowY:"auto",background:T.bg}}>
         {tab==="overview"&&<>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:18}}>
-            {[[T.blue,"Total Plays",fmtNum(totalPlays)],[T.orange,"Total Likes",fmtNum(totalLikes)],[T.green,"Published",approved.length],[T.purple,"Followers",fmtNum(currentUser.followers||0)]].map(([col,lbl,val])=>(
-              <div key={lbl} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px 12px",borderLeft:`3px solid ${col}`}}>
-                <div style={{color:col,fontSize:24,fontWeight:700,fontFamily:"'Syne',sans-serif"}}>{val}</div>
-                <div style={{color:T.sub,fontSize:11,marginTop:3}}>{lbl}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:18}}>
+            {[["Total Plays",fmtNum(totalPlays),T.blue],["Total Likes",fmtNum(totalLikes),T.red],["Published",approved.length,T.green],["Followers",fmtNum(currentUser.followers||0),T.gold]].map(([lbl,val,col])=>(
+              <div key={lbl} style={{background:`linear-gradient(155deg, ${T.bg2} 0%, ${T.bg1} 100%)`,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 16px",position:"relative",overflow:"hidden"}}>
+                <div style={{position:"absolute",top:0,left:0,width:"100%",height:2,background:`linear-gradient(90deg, ${col}, transparent)`}}/>
+                <div style={{color:T.text,fontSize:25,fontWeight:800,fontFamily:"'Syne',sans-serif",letterSpacing:-.5}}>{val}</div>
+                <div style={{color:T.sub,fontSize:11,marginTop:4,letterSpacing:.3}}>{lbl}</div>
               </div>
             ))}
           </div>
           {approved.length>0&&(()=>{const top=[...approved].sort((a,b)=>b.plays-a.plays)[0];return(
-            <div style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",gap:10,alignItems:"center"}}>
-              <img src={top.cover} alt="" style={{width:42,height:42,borderRadius:6,objectFit:"cover",flexShrink:0}}/>
+            <div style={{background:`linear-gradient(135deg, ${T.goldDim} 0%, ${T.bg2} 65%)`,border:`1px solid ${T.goldBorder}`,borderRadius:14,padding:"15px 16px",marginBottom:14,display:"flex",gap:13,alignItems:"center"}}>
+              <div style={{position:"relative",flexShrink:0}}>
+                <img src={top.cover} alt="" style={{width:48,height:48,borderRadius:8,objectFit:"cover",boxShadow:"0 6px 16px rgba(0,0,0,.4)"}}/>
+                <div style={{position:"absolute",top:-6,left:-6,width:18,height:18,borderRadius:"50%",background:T.gold,color:"#211705",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,boxShadow:"0 2px 6px rgba(0,0,0,.5)"}}>★</div>
+              </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:T.mute,fontSize:10,fontWeight:700,letterSpacing:.5,marginBottom:2}}>🏆 TOP TRACK</div>
-                <div style={{color:T.text,fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{top.title}</div>
-                <div style={{color:T.sub,fontSize:11}}>{fmtNum(top.plays)} plays · {fmtNum(top.likes)} likes</div>
+                <div style={{color:T.gold,fontSize:9,fontWeight:700,letterSpacing:1.4,marginBottom:3,textTransform:"uppercase"}}>Top Track</div>
+                <div style={{color:T.text,fontSize:14,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{top.title}</div>
+                <div style={{color:T.sub,fontSize:11,marginTop:1}}>{fmtNum(top.plays)} plays · {fmtNum(top.likes)} likes</div>
               </div>
             </div>
           );})()}
-          {pending.length>0&&<div style={{background:T.orangeDim,border:`1px solid ${T.orangeBorder}`,borderRadius:10,padding:"12px 16px"}}>
-            <p style={{color:T.orange,fontSize:12,fontWeight:600}}>{pending.length} track{pending.length>1?"s":""} pending review</p>
+          {pending.length>0&&<div style={{background:T.bg2,border:`1px solid ${T.border2}`,borderLeft:`3px solid ${T.gold}`,borderRadius:10,padding:"13px 16px"}}>
+            <p style={{color:T.text,fontSize:12,fontWeight:600}}>{pending.length} track{pending.length>1?"s":""} pending review</p>
             <p style={{color:T.sub,fontSize:11,marginTop:2}}>Usually approved within 24 hours.</p>
           </div>}
           {artistSongs.length===0&&<EmptyState title="No tracks yet" sub="Upload your first track to see analytics."/>}
@@ -1756,28 +1780,28 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
 
         {tab==="uploads"&&(artistSongs.length===0
           ?<EmptyState title="No uploads yet" sub="Your tracks will appear here."/>
-          :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+          :<div style={{display:"flex",flexDirection:"column",gap:10}}>
             {artistSongs.map(s=>(
               <div key={s.id}>
-                <div style={{display:"flex",gap:10,alignItems:"center",background:T.bg2,border:`1px solid ${editSong?.id===s.id?T.blueBorder:T.border}`,borderRadius:8,padding:"9px 12px"}}>
-                  <img src={s.cover} alt="" style={{width:40,height:40,borderRadius:6,objectFit:"cover",flexShrink:0}}/>
+                <div style={{display:"flex",gap:12,alignItems:"center",background:T.bg2,border:`1px solid ${editSong?.id===s.id?T.goldBorder:T.border}`,borderRadius:12,padding:"11px 14px",transition:"border-color .15s"}}>
+                  <img src={s.cover} alt="" style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0,boxShadow:"0 4px 10px rgba(0,0,0,.35)"}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
-                    <div style={{color:T.sub,fontSize:11}}>{s.genre} · {new Date(s.uploadedAt||s.release||Date.now()).toLocaleDateString()}</div>
+                    <div style={{color:T.text,fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
+                    <div style={{color:T.sub,fontSize:11,marginTop:1}}>{s.genre} · {new Date(s.uploadedAt||s.release||Date.now()).toLocaleDateString()}</div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{color:T.mute,fontSize:11,marginBottom:3}}>{fmtNum(s.plays)} plays · {fmtNum(s.likes)} ♥</div>
-                    <span style={{padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,background:`${sColor[s.status]||T.mute}22`,color:sColor[s.status]||T.mute}}>{s.status}</span>
+                    <div style={{color:T.mute,fontSize:11,marginBottom:4}}>{fmtNum(s.plays)} plays · {fmtNum(s.likes)} ♥</div>
+                    <span style={{padding:"3px 10px",borderRadius:20,fontSize:9.5,fontWeight:700,letterSpacing:.3,background:`${sColor[s.status]||T.mute}1c`,color:sColor[s.status]||T.mute,border:`1px solid ${sColor[s.status]||T.mute}40`}}>{s.status}</span>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
-                    <button style={{background:`${T.blue}18`,border:`1px solid ${T.blueBorder}`,borderRadius:5,color:T.blue,fontSize:10,fontWeight:700,cursor:"pointer",padding:"3px 8px",fontFamily:"'DM Sans',sans-serif"}}
+                  <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                    <button style={{background:"none",border:`1px solid ${T.border2}`,borderRadius:6,color:T.sub,fontSize:10,fontWeight:700,cursor:"pointer",padding:"4px 9px",fontFamily:"'DM Sans',sans-serif"}}
                       onClick={()=>{
                         if(editSong?.id===s.id){setEditSong(null);}
                         else{setEditSong(s);setEditTitle(s.title);setEditGenre(s.genre||"Afrobeat");}
                       }}>
-                      {editSong?.id===s.id?"✕":"Edit"}
+                      {editSong?.id===s.id?"Close":"Edit"}
                     </button>
-                    <button style={{background:`${T.red}18`,border:`1px solid ${T.redBorder}`,borderRadius:5,color:T.red,fontSize:10,fontWeight:700,cursor:"pointer",padding:"3px 8px",fontFamily:"'DM Sans',sans-serif"}}
+                    <button style={{background:"none",border:`1px solid ${T.redBorder}`,borderRadius:6,color:T.red,fontSize:10,fontWeight:700,cursor:"pointer",padding:"4px 9px",fontFamily:"'DM Sans',sans-serif"}}
                       onClick={async()=>{
                         if(!window.confirm(`Delete "${s.title}"? This cannot be undone.`))return;
                         onUpdateUser&&onUpdateUser(currentUser); // keep user in sync
@@ -1792,12 +1816,12 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
                         toast(`"${s.title}" deleted`,"info");
                         if(editSong?.id===s.id)setEditSong(null);
                       }}>
-                      Del
+                      Delete
                     </button>
                   </div>
                 </div>
                 {editSong?.id===s.id&&(
-                  <div style={{background:T.bg1,border:`1px solid ${T.blueBorder}`,borderRadius:"0 0 8px 8px",padding:"14px 12px",marginTop:-1}}>
+                  <div style={{background:T.bg1,border:`1px solid ${T.goldBorder}`,borderRadius:"0 0 12px 12px",padding:"16px 14px",marginTop:-1}}>
                     <Field label="Track title">
                       <input style={inp()} value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="Track title"/>
                     </Field>
@@ -1806,7 +1830,7 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
                         {GENRES.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
                       </select>
                     </Field>
-                    <Btn loading={savingSong} onClick={async()=>{
+                    <Btn loading={savingSong} color={T.gold} onClick={async()=>{
                       if(!editTitle.trim()){toast("Title can't be empty","error");return;}
                       setSavingSong(true);
                       try{
@@ -1830,16 +1854,19 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
         {tab==="analytics"&&(approved.length===0
           ?<EmptyState title="No analytics yet" sub="Analytics appear once tracks are approved."/>
           :<>
-            <h3 style={{color:T.sub,fontSize:10,fontWeight:700,letterSpacing:1,marginBottom:14}}>PLAYS PER TRACK</h3>
-            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
-              {[...approved].sort((a,b)=>b.plays-a.plays).map(s=>(
-                <div key={s.id}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                    <span style={{color:T.text,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:200}}>{s.title}</span>
-                    <span style={{color:T.mute,fontSize:11,flexShrink:0,marginLeft:8}}>{fmtNum(s.plays)}</span>
-                  </div>
-                  <div style={{height:6,background:T.border,borderRadius:3,overflow:"hidden"}}>
-                    <div style={{height:"100%",background:`linear-gradient(90deg,${T.blue},${T.green})`,borderRadius:3,width:`${Math.max((s.plays/maxPlays)*100,2)}%`,transition:"width .6s ease"}}/>
+            <h3 style={{color:T.sub,fontSize:10,fontWeight:700,letterSpacing:1.5,marginBottom:16,textTransform:"uppercase"}}>Plays per track</h3>
+            <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:24}}>
+              {[...approved].sort((a,b)=>b.plays-a.plays).map((s,i)=>(
+                <div key={s.id} style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{width:18,textAlign:"center",color:i===0?T.gold:T.mute,fontSize:13,fontWeight:800,fontFamily:"'Syne',sans-serif",flexShrink:0}}>{i+1}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <span style={{color:T.text,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:200}}>{s.title}</span>
+                      <span style={{color:T.mute,fontSize:11,flexShrink:0,marginLeft:8}}>{fmtNum(s.plays)}</span>
+                    </div>
+                    <div style={{height:5,background:T.border,borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",background:i===0?`linear-gradient(90deg,${T.gold},${T.goldSoft})`:`linear-gradient(90deg,${T.blue},${T.purple})`,borderRadius:3,width:`${Math.max((s.plays/maxPlays)*100,2)}%`,transition:"width .6s ease"}}/>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1848,27 +1875,29 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
         )}
 
         {tab==="editprofile"&&<>
-          <Field label="Profile photo">
-            <label style={{display:"flex",gap:12,alignItems:"center",cursor:"pointer"}}>
-              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
-                const f=e.target.files[0];
-                if(f){const r=new FileReader();r.onload=ev=>setAvatar(ev.target.result);r.readAsDataURL(f);}
-              }}/>
-              {avatar?<img src={avatar} style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",border:`2px solid ${T.blueBorder}`}} alt=""/>
-                :<div style={{width:52,height:52,borderRadius:"50%",background:`${T.blue}18`,border:`1px solid ${T.blueBorder}`,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:700}}>{currentUser.name[0].toUpperCase()}</div>}
-              <span style={{color:T.blue,fontSize:12,fontWeight:600}}>Change photo</span>
-            </label>
-          </Field>
-          <Field label="Bio"><textarea style={{...inp(),height:88,resize:"none"}} value={bio} onChange={e=>setBio(e.target.value)} placeholder="Tell listeners about yourself..."/></Field>
-          <Field label="Genre">
-            <select style={inp()} value={genre} onChange={e=>setGenre(e.target.value)}>
-              {GENRES.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Country">
-            <input style={inp()} value={country} onChange={e=>setCountry(e.target.value)} placeholder="e.g. Malawi, Kenya, Nigeria..."/>
-          </Field>
-          <Btn full onClick={async()=>{
+          <div style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:14,padding:18,marginBottom:16}}>
+            <Field label="Profile photo">
+              <label style={{display:"flex",gap:14,alignItems:"center",cursor:"pointer"}}>
+                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                  const f=e.target.files[0];
+                  if(f){const r=new FileReader();r.onload=ev=>setAvatar(ev.target.result);r.readAsDataURL(f);}
+                }}/>
+                {avatar?<img src={avatar} style={{width:58,height:58,borderRadius:"50%",objectFit:"cover",border:`2px solid ${T.goldBorder}`}} alt=""/>
+                  :<div style={{width:58,height:58,borderRadius:"50%",background:T.goldDim,border:`1px solid ${T.goldBorder}`,display:"flex",alignItems:"center",justifyContent:"center",color:T.gold,fontSize:20,fontWeight:700,fontFamily:"'Syne',sans-serif"}}>{currentUser.name[0].toUpperCase()}</div>}
+                <span style={{color:T.gold,fontSize:12,fontWeight:600}}>Change photo</span>
+              </label>
+            </Field>
+            <Field label="Bio"><textarea style={{...inp(),height:88,resize:"none"}} value={bio} onChange={e=>setBio(e.target.value)} placeholder="Tell listeners about yourself..."/></Field>
+            <Field label="Genre">
+              <select style={inp()} value={genre} onChange={e=>setGenre(e.target.value)}>
+                {GENRES.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Country">
+              <input style={inp()} value={country} onChange={e=>setCountry(e.target.value)} placeholder="e.g. Malawi, Kenya, Nigeria..."/>
+            </Field>
+          </div>
+          <Btn full color={T.gold} onClick={async()=>{
             let avatarUrl=avatar;
             if(isSupabaseReady&&avatar&&avatar.startsWith("data:")){
               try{
@@ -1894,66 +1923,68 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
 
         {tab==="verify"&&<>
           {currentUser.verified
-            ?<div style={{textAlign:"center",padding:"30px 0"}}>
-              <div style={{fontSize:48,marginBottom:12}}>🏅</div>
-              <p style={{color:T.green,fontSize:16,fontWeight:700,marginBottom:6}}>You are verified!</p>
+            ?<div style={{textAlign:"center",padding:"34px 0"}}>
+              <div style={{width:62,height:62,borderRadius:"50%",background:T.goldDim,border:`1.5px solid ${T.goldBorder}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:24,color:T.gold,fontWeight:800}}>✓</div>
+              <p style={{color:T.gold,fontSize:16,fontWeight:700,marginBottom:6,fontFamily:"'Syne',sans-serif"}}>You're verified</p>
               <p style={{color:T.sub,fontSize:12}}>Your verified badge is showing on your profile.</p>
             </div>
             :verificationStatus==="Pending"
-            ?<div style={{textAlign:"center",padding:"30px 0"}}>
-              <div style={{fontSize:36,marginBottom:12}}>⏳</div>
+            ?<div style={{textAlign:"center",padding:"34px 0"}}>
+              <div style={{fontSize:34,marginBottom:14}}>⏳</div>
               <p style={{color:T.orange,fontSize:14,fontWeight:600,marginBottom:6}}>Verification pending</p>
               <p style={{color:T.sub,fontSize:12,lineHeight:1.6}}>Your request is under review. We'll notify you within 3–5 business days.</p>
             </div>
             :<>
-              <div style={{background:`${T.blue}0E`,border:`1px solid ${T.blueBorder}`,borderRadius:8,padding:"12px 14px",marginBottom:18}}>
-                <p style={{color:T.sub,fontSize:12,lineHeight:1.7}}>Get a <strong style={{color:T.blue}}>verified badge</strong> ✓ to confirm you're the real artist. Increases trust and discoverability.</p>
+              <div style={{background:T.goldDim,border:`1px solid ${T.goldBorder}`,borderRadius:12,padding:"14px 16px",marginBottom:18}}>
+                <p style={{color:T.sub,fontSize:12,lineHeight:1.7}}>Get a <strong style={{color:T.gold}}>verified badge</strong> ✓ to confirm you're the real artist. Increases trust and discoverability.</p>
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
-                {["Blue verified badge on your profile","Priority placement in search","Access to advanced analytics","Future monetization features"].map(b=>(
-                  <div key={b} style={{display:"flex",gap:8,alignItems:"center"}}><span style={{color:T.green,fontSize:12}}>✓</span><span style={{color:T.sub,fontSize:12}}>{b}</span></div>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+                {["Gold verified badge on your profile","Priority placement in search","Access to advanced analytics","Future monetization features"].map(b=>(
+                  <div key={b} style={{display:"flex",gap:9,alignItems:"center"}}><span style={{color:T.gold,fontSize:12}}>✓</span><span style={{color:T.sub,fontSize:12}}>{b}</span></div>
                 ))}
               </div>
-              <Btn full color={T.blue} onClick={()=>{onClose();setTimeout(()=>onVerify&&onVerify(),100);}}>Apply for Verification →</Btn>
+              <Btn full color={T.gold} onClick={()=>{onClose();setTimeout(()=>onVerify&&onVerify(),100);}}>Apply for Verification →</Btn>
             </>}
         </>}
 
         {tab==="revenue"&&<>
           {/* Summary cards */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
             {[
-              [T.green,"Total Earned",`MWK ${fmtNum(revenueData.reduce((a,d)=>a+(d.amount||0),0))}`],
-              [T.blue,"Downloads",fmtNum(revenueData.length)],
-              [T.orange,"This Month",`MWK ${fmtNum(revenueData.filter(d=>new Date(d.created_at)>new Date(Date.now()-30*24*60*60*1000)).reduce((a,d)=>a+(d.amount||0),0))}`],
-              [T.purple,"Per Download","MWK 500"],
-            ].map(([col,lbl,val])=>(
-              <div key={lbl} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 14px"}}>
-                <div style={{color:T.mute,fontSize:10,letterSpacing:.5,marginBottom:4}}>{lbl}</div>
-                <div style={{color:col,fontSize:16,fontWeight:700,fontFamily:"'Syne',sans-serif"}}>{val}</div>
+              ["Total Earned",`MWK ${fmtNum(revenueData.reduce((a,d)=>a+(d.amount||0),0))}`,T.gold],
+              ["Downloads",fmtNum(revenueData.length),T.blue],
+              ["This Month",`MWK ${fmtNum(revenueData.filter(d=>new Date(d.created_at)>new Date(Date.now()-30*24*60*60*1000)).reduce((a,d)=>a+(d.amount||0),0))}`,T.green],
+              ["Per Download","MWK 500",T.purple],
+            ].map(([lbl,val,col])=>(
+              <div key={lbl} style={{background:`linear-gradient(155deg, ${T.bg2} 0%, ${T.bg1} 100%)`,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{color:T.mute,fontSize:10,letterSpacing:.6,marginBottom:5,textTransform:"uppercase"}}>{lbl}</div>
+                <div style={{color:col,fontSize:17,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>{val}</div>
               </div>
             ))}
           </div>
 
           {/* Download history */}
-          <h4 style={{color:T.sub,fontSize:11,fontWeight:700,letterSpacing:.5,marginBottom:10}}>RECENT DOWNLOADS</h4>
+          <h4 style={{color:T.sub,fontSize:10,fontWeight:700,letterSpacing:1.5,marginBottom:12,textTransform:"uppercase"}}>Recent downloads</h4>
           {revenueData.length===0
-            ?<div style={{textAlign:"center",padding:"24px 0"}}>
+            ?<div style={{textAlign:"center",padding:"28px 0"}}>
               <div style={{fontSize:32,marginBottom:8}}>💸</div>
               <p style={{color:T.mute,fontSize:12}}>No downloads yet. Share your music to get downloads!</p>
             </div>
-            :revenueData.slice(0,20).map(d=>{
-              const song=artistSongs.find(s=>s.id===d.song_id);
-              return(
-                <div key={d.id} style={{display:"flex",gap:10,alignItems:"center",background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
-                  {song?.cover&&<img src={song.cover} alt="" style={{width:36,height:36,borderRadius:4,objectFit:"cover",flexShrink:0}}/>}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{song?.title||"Unknown track"}</div>
-                    <div style={{color:T.mute,fontSize:10}}>{new Date(d.created_at).toLocaleDateString()}</div>
+            :<div style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+              {recentDownloads.map((d,i)=>{
+                const song=artistSongs.find(s=>s.id===d.song_id);
+                return(
+                  <div key={d.id} style={{display:"flex",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:i<recentDownloads.length-1?`1px solid ${T.border}`:"none"}}>
+                    {song?.cover&&<img src={song.cover} alt="" style={{width:38,height:38,borderRadius:6,objectFit:"cover",flexShrink:0}}/>}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{song?.title||"Unknown track"}</div>
+                      <div style={{color:T.mute,fontSize:10,marginTop:1}}>{new Date(d.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div style={{color:T.gold,fontSize:12,fontWeight:700,flexShrink:0,fontFamily:"'Syne',sans-serif"}}>+MWK {d.amount||500}</div>
                   </div>
-                  <div style={{color:T.green,fontSize:12,fontWeight:700,flexShrink:0}}>+MWK {d.amount||500}</div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           }
         </>}
       </div>
