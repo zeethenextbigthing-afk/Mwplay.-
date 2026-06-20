@@ -1210,37 +1210,76 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
     const au=new Audio(url);au.onloadedmetadata=()=>setAudioDuration(au.duration);
   };
 
+  const [uploading,setUploading]=useState(false);
+  const [uploadStep,setUploadStep]=useState("");
+  const [uploadProgress,setUploadProgress]=useState(0);
+  const [uploadDone,setUploadDone]=useState(false);
+
+  if(uploadDone)return(
+    <Modal onClose={onClose} maxWidth={360}>
+      <div style={{textAlign:"center",padding:"32px 16px"}}>
+        <div style={{width:72,height:72,borderRadius:"50%",background:`${T.green}18`,border:`2px solid ${T.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:32}}>✅</div>
+        <h2 style={{color:T.text,fontFamily:"'Syne',sans-serif",fontSize:20,marginBottom:8}}>Upload Complete!</h2>
+        <p style={{color:T.sub,fontSize:13,lineHeight:1.7,marginBottom:6}}>Your track has been submitted for review.</p>
+        <p style={{color:T.mute,fontSize:12,marginBottom:24}}>We'll publish it within 24 hours after confirming your payment.</p>
+        <Btn full onClick={onClose}>Done</Btn>
+      </div>
+    </Modal>
+  );
+
+  if(uploading)return(
+    <Modal onClose={()=>{}} maxWidth={360}>
+      <div style={{textAlign:"center",padding:"32px 16px"}}>
+        <div style={{fontSize:36,marginBottom:16}}>🎵</div>
+        <h3 style={{color:T.text,fontFamily:"'Syne',sans-serif",fontSize:17,marginBottom:6}}>Uploading your track…</h3>
+        <p style={{color:T.sub,fontSize:12,marginBottom:24,lineHeight:1.6}}>{uploadStep}</p>
+        {/* Progress bar */}
+        <div style={{height:6,background:T.border,borderRadius:3,overflow:"hidden",marginBottom:8}}>
+          <div style={{height:"100%",background:`linear-gradient(90deg,${T.blue},${T.green})`,borderRadius:3,width:`${uploadProgress}%`,transition:"width .4s ease"}}/>
+        </div>
+        <p style={{color:T.mute,fontSize:11,marginBottom:0}}>{uploadProgress}% complete — please don't close this screen</p>
+      </div>
+    </Modal>
+  );
+
   if(showPay)return(
     <PaymentModal amount={UPLOAD_FEE} amountLabel={UPLOAD_FEE_LABEL} purpose={`Upload "${form.title}"`}
       onSuccess={async txnId=>{
-        toast("Uploading your track… please wait ⏳","info");
+        setUploading(true);
         try{
+          setUploadStep("Preparing your files…"); setUploadProgress(5);
           const authUserId=await requireAuthUserId(currentUser);
           const id=genId();
 
-          // Read files into memory WHILE modal is still mounted
+          // Read files into memory
           let audioBuffer=null, coverBlob=null;
           if(audio){
+            setUploadStep("Reading audio file…"); setUploadProgress(15);
             audioBuffer=await audio.arrayBuffer();
           }
           if(cover&&cover.startsWith("data:")){
             coverBlob=dataUrlToBlob(cover);
           }
 
-          // Upload files to Supabase Storage
+          // Upload cover first (faster)
           let audioUrl=null, coverUrl=null;
           if(isSupabaseReady){
+            if(coverBlob){
+              setUploadStep("Uploading cover image…"); setUploadProgress(30);
+              coverUrl=await uploadFile("covers",`${authUserId}/${id}.jpg`,coverBlob);
+              setUploadProgress(45);
+            }
             if(audioBuffer){
+              setUploadStep("Uploading audio file… (this may take a moment)"); setUploadProgress(50);
               const ext=(audio.name.split(".").pop()||"mp3").toLowerCase();
               const blob=new Blob([audioBuffer],{type:audio.type||"audio/mpeg"});
               audioUrl=await uploadFile("audio",`${authUserId}/${id}.${ext}`,blob);
-            }
-            if(coverBlob){
-              coverUrl=await uploadFile("covers",`${authUserId}/${id}.jpg`,coverBlob);
+              setUploadProgress(80);
             }
           }
 
-          // Now insert song row with real URLs
+          // Insert song row
+          setUploadStep("Saving your track…"); setUploadProgress(90);
           const song={id,title:form.title,artist:currentUser.name,artistId:authUserId,
             genre:form.genre,plays:0,likes:0,albumName:form.albumName,isExplicit:form.isExplicit,
             cover:coverUrl||`https://picsum.photos/seed/${id}/300/300`,
@@ -1257,10 +1296,12 @@ function UploadModal({onClose,currentUser,onUpload,toast,onUpdateSong}){
             savedSong=songFromDb(row);
           }
           onUpload(savedSong);
-          toast("Track submitted for review! ✅","success");
-          onClose();
+          setUploadProgress(100);
+          setUploadStep("Done!");
+          setTimeout(()=>{setUploading(false);setUploadDone(true);},500);
         }catch(e){
           console.error("Upload error:",e);
+          setUploading(false);
           toast("Upload failed: "+fullErrMsg(e),"error");
           onClose();
         }
