@@ -1,26 +1,37 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#070A10" />
+    <meta name="description" content="MW Play — Africa's Music Platform. Upload, stream and discover music from Malawi and beyond." />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MW Play" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="description" content="MW Play — Africa's Music Platform. Upload, stream and discover music." />
-    <meta property="og:title" content="MW Play" />
-    <meta property="og:description" content="Africa's Music Platform" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Open Graph (WhatsApp/Facebook link previews) -->
+    <meta property="og:title" content="MW Play — Africa's Music Platform" />
+    <meta property="og:description" content="Upload, stream and discover music from Malawi and across Africa." />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://mwplay.vercel.app" />
+    <meta property="og:image" content="https://mwplay.vercel.app/og-image.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MW Play" />
+    <meta name="twitter:description" content="Africa's Music Platform — Stream and discover Malawian music." />
+
     <title>MW Play</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { background: #070A10; color: #fff; height: 100%; overflow: hidden; }
       #root { height: 100vh; overflow: hidden; }
-      /* Prevent iOS bounce */
       body { overscroll-behavior: none; }
     </style>
   </head>
@@ -28,9 +39,11 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          navigator.serviceWorker.register("/sw.js").catch(function () {});
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(r => console.log('SW registered:', r.scope))
+            .catch(e => console.log('SW failed:', e));
         });
       }
     </script>

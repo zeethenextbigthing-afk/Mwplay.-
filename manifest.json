@@ -1,0 +1,21 @@
+{
+  "name": "MW Play",
+  "short_name": "MW Play",
+  "description": "Africa's music streaming platform — upload, stream and connect",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070A10",
+  "theme_color": "#1A8FE3",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["music", "entertainment"],
+  "lang": "en",
+  "scope": "/"
+}
