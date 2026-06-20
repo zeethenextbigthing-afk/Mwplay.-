@@ -348,23 +348,47 @@ function DownloadModal({ song, currentUser, onClose, toast, addNotif }) {
   const [paid, setPaid] = useState(false);
   const [showPay, setShowPay] = useState(false);
 
-  const doDownload = () => {
-    if (song.audioUrl) {
+  const doDownload = async () => {
+    if (!song.audioUrl) {
+      toast("Audio file not available for download","error");
+      onClose();
+      return;
+    }
+    toast("Preparing download…","info");
+    try {
+      const response = await fetch(song.audioUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = song.audioUrl;
+      a.href = url;
       a.download = `${song.artist} - ${song.title}.mp3`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url), 5000);
       toast("Download started! 🎵","success");
       addNotif&&addNotif("download",`Downloaded "${song.title}"`);
-    } else {
-      toast("Audio file not available for download","error");
+    } catch(e) {
+      // Fallback: open in new tab
+      window.open(song.audioUrl,"_blank");
+      toast("Opening track in browser — save from there 🎵","info");
     }
     onClose();
   };
 
   if (showPay) return (
     <PaymentModal amount={DOWNLOAD_FEE} amountLabel={DOWNLOAD_FEE_LABEL} purpose={`Download "${song.title}"`}
-      onSuccess={txnId=>{ setPaid(true); setShowPay(false); doDownload(); }}
+      onSuccess={async txnId=>{
+        setPaid(true); setShowPay(false);
+        // Log download to database
+        if(isSupabaseReady){
+          supabase.from('downloads').insert([{
+            song_id:song.id,
+            buyer_id:currentUser?.id||null,
+            payment_ref:txnId,
+            amount:DOWNLOAD_FEE,
+          }]).catch(()=>{});
+        }
+        await doDownload();
+      }}
       onClose={()=>setShowPay(false)}/>
   );
 
@@ -1672,6 +1696,7 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
   const [editTitle,setEditTitle]=useState("");
   const [editGenre,setEditGenre]=useState("");
   const [savingSong,setSavingSong]=useState(false);
+  const [revenueData,setRevenueData]=useState([]);
   const artistSongs=songs.filter(s=>s.artistId===currentUser.id);
   const approved=artistSongs.filter(s=>s.status==="Approved");
   const pending=artistSongs.filter(s=>s.status==="Pending");
@@ -1679,6 +1704,14 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
   const totalLikes=artistSongs.reduce((a,s)=>a+s.likes,0);
   const maxPlays=Math.max(...approved.map(s=>s.plays),1);
   const sColor={"Approved":T.green,"Pending":T.orange,"Rejected":T.red};
+
+  useEffect(()=>{
+    if(tab!=="revenue"||!isSupabaseReady)return;
+    const songIds=artistSongs.map(s=>s.id);
+    if(!songIds.length)return;
+    supabase.from('downloads').select('*').in('song_id',songIds).order('created_at',{ascending:false})
+      .then(({data})=>{if(data)setRevenueData(data);}).catch(()=>{});
+  },[tab]);
 
   return(
     <Modal onClose={onClose} maxWidth={680} padding="0">
@@ -1690,7 +1723,7 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
         <button onClick={onClose} style={{background:"none",border:"none",color:T.mute,fontSize:20,cursor:"pointer"}}>✕</button>
       </div>
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,padding:"0 22px",overflowX:"auto"}}>
-        {[["overview","Overview"],["uploads","Tracks"],["analytics","Analytics"],["editprofile","Profile"],["verify","Verify"]].map(([k,l])=>(
+        {[["overview","Overview"],["uploads","Tracks"],["analytics","Analytics"],["editprofile","Profile"],["verify","Verify"],["revenue","💰 Revenue"]].map(([k,l])=>(
           <button key={k} style={{whiteSpace:"nowrap",padding:"13px 14px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:tab===k?T.blue:T.sub,borderBottom:tab===k?`2px solid ${T.blue}`:"2px solid transparent",marginBottom:-1,fontFamily:"'DM Sans',sans-serif"}} onClick={()=>setTab(k)}>{l}</button>
         ))}
       </div>
@@ -1883,6 +1916,45 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
               </div>
               <Btn full color={T.blue} onClick={()=>{onClose();setTimeout(()=>onVerify&&onVerify(),100);}}>Apply for Verification →</Btn>
             </>}
+        </>}
+
+        {tab==="revenue"&&<>
+          {/* Summary cards */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+            {[
+              [T.green,"Total Earned",`MWK ${fmtNum(revenueData.reduce((a,d)=>a+(d.amount||0),0))}`],
+              [T.blue,"Downloads",fmtNum(revenueData.length)],
+              [T.orange,"This Month",`MWK ${fmtNum(revenueData.filter(d=>new Date(d.created_at)>new Date(Date.now()-30*24*60*60*1000)).reduce((a,d)=>a+(d.amount||0),0))}`],
+              [T.purple,"Per Download","MWK 500"],
+            ].map(([col,lbl,val])=>(
+              <div key={lbl} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 14px"}}>
+                <div style={{color:T.mute,fontSize:10,letterSpacing:.5,marginBottom:4}}>{lbl}</div>
+                <div style={{color:col,fontSize:16,fontWeight:700,fontFamily:"'Syne',sans-serif"}}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Download history */}
+          <h4 style={{color:T.sub,fontSize:11,fontWeight:700,letterSpacing:.5,marginBottom:10}}>RECENT DOWNLOADS</h4>
+          {revenueData.length===0
+            ?<div style={{textAlign:"center",padding:"24px 0"}}>
+              <div style={{fontSize:32,marginBottom:8}}>💸</div>
+              <p style={{color:T.mute,fontSize:12}}>No downloads yet. Share your music to get downloads!</p>
+            </div>
+            :revenueData.slice(0,20).map(d=>{
+              const song=artistSongs.find(s=>s.id===d.song_id);
+              return(
+                <div key={d.id} style={{display:"flex",gap:10,alignItems:"center",background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 12px",marginBottom:6}}>
+                  {song?.cover&&<img src={song.cover} alt="" style={{width:36,height:36,borderRadius:4,objectFit:"cover",flexShrink:0}}/>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{song?.title||"Unknown track"}</div>
+                    <div style={{color:T.mute,fontSize:10}}>{new Date(d.created_at).toLocaleDateString()}</div>
+                  </div>
+                  <div style={{color:T.green,fontSize:12,fontWeight:700,flexShrink:0}}>+MWK {d.amount||500}</div>
+                </div>
+              );
+            })
+          }
         </>}
       </div>
     </Modal>
