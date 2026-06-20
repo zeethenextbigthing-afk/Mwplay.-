@@ -14,7 +14,6 @@ const T = {
   bg:"#070A10", bg1:"#0B0F1A", bg2:"#0F1420", card:"#0D1220",
   border:"#151D2E", border2:"#1C2840",
   text:"#FFFFFF", sub:"#6B7A99", mute:"#2A3550",
-  gold:"#C8A951", goldSoft:"#E4C679", goldDim:"#C8A95120", goldBorder:"#C8A95150",
 };
 
 const GENRES = [
@@ -36,6 +35,29 @@ const UPLOAD_FEE_LABEL = "MWK 1,000";
 const fmtNum = n => n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(0)+"K":String(n);
 const fmtTime = s => { const m=Math.floor(s/60),sec=Math.floor(s%60); return `${m}:${sec.toString().padStart(2,"0")}`; };
 const genId = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+async function requestNotifPermission(){
+  if(!("Notification" in window))return false;
+  if(Notification.permission==="granted")return true;
+  if(Notification.permission==="denied")return false;
+  const result=await Notification.requestPermission();
+  return result==="granted";
+}
+
+function sendPushNotif(title, body, icon="/favicon.svg"){
+  if(!("Notification" in window)||Notification.permission!=="granted")return;
+  try{
+    new Notification(title,{body,icon,badge:icon,tag:"mwplay"});
+  }catch(e){
+    // Some browsers require service worker notifications
+    if(navigator.serviceWorker?.controller){
+      navigator.serviceWorker.ready.then(sw=>{
+        sw.showNotification(title,{body,icon,badge:icon,tag:"mwplay"});
+      }).catch(()=>{});
+    }
+  }
+}
 
 // Build a fuller error message from a Supabase/Postgres error object,
 // including table/detail/hint when available — helps pinpoint which
@@ -1693,7 +1715,7 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
   const [genre,setGenre]=useState(currentUser.genre||"Afrobeat");
   const [country,setCountry]=useState(currentUser.country||"");
   const [avatar,setAvatar]=useState(currentUser.avatar);
-  const [editSong,setEditSong]=useState(null); // song being edited
+  const [editSong,setEditSong]=useState(null);
   const [editTitle,setEditTitle]=useState("");
   const [editGenre,setEditGenre]=useState("");
   const [savingSong,setSavingSong]=useState(false);
@@ -1704,7 +1726,7 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
   const totalPlays=artistSongs.reduce((a,s)=>a+s.plays,0);
   const totalLikes=artistSongs.reduce((a,s)=>a+s.likes,0);
   const maxPlays=Math.max(...approved.map(s=>s.plays),1);
-  const sColor={"Approved":T.green,"Pending":T.gold,"Rejected":T.red};
+  const sColor={"Approved":T.green,"Pending":T.orange,"Rejected":T.red};
 
   useEffect(()=>{
     if(tab!=="revenue"||!isSupabaseReady)return;
@@ -1715,135 +1737,127 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
   },[tab]);
 
   const TABS=[["overview","Overview"],["uploads","Tracks"],["analytics","Analytics"],["editprofile","Profile"],["verify","Verify"],["revenue","Revenue"]];
-  const recentDownloads=revenueData.slice(0,20);
 
   return(
-    <Modal onClose={onClose} maxWidth={700} padding="0">
-      {/* ── Premium header ─────────────────────────────────────── */}
-      <div style={{position:"relative",padding:"24px 26px 0",background:`linear-gradient(165deg, ${T.bg1} 0%, ${T.bg} 100%)`,borderBottom:`1px solid ${T.border}`}}>
-        <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg, transparent, ${T.gold}, transparent)`}}/>
-        <button onClick={onClose} style={{position:"absolute",top:18,right:22,background:"none",border:"none",color:T.mute,fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
-        <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:18}}>
-          <div style={{width:54,height:54,borderRadius:"50%",overflow:"hidden",flexShrink:0,border:`1.5px solid ${T.goldBorder}`,boxShadow:`0 0 0 4px ${T.goldDim}`,display:"flex",alignItems:"center",justifyContent:"center",background:T.bg2,fontFamily:"'Syne',sans-serif",fontSize:19,fontWeight:700,color:T.gold}}>
-            {currentUser.avatar?<img src={currentUser.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:currentUser.name[0].toUpperCase()}
-          </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:T.gold,fontSize:10,fontWeight:700,letterSpacing:1.8,marginBottom:4,textTransform:"uppercase"}}>Artist Dashboard</div>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <h2 style={{color:T.text,fontFamily:"'Syne',sans-serif",fontSize:19,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:260}}>{currentUser.name}</h2>
-              {currentUser.verified&&<span style={{background:T.goldDim,color:T.gold,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.goldBorder}`,flexShrink:0,letterSpacing:.4}}>✓ VERIFIED</span>}
+    <Modal onClose={onClose} maxWidth={680} padding="0">
+      {/* Header */}
+      <div style={{background:`linear-gradient(135deg,${T.bg1} 0%,${T.bg2} 100%)`,padding:"24px 24px 0",borderBottom:`1px solid ${T.border}`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{position:"relative"}}>
+              {avatar?<img src={avatar} style={{width:48,height:48,borderRadius:"50%",objectFit:"cover",border:`2px solid ${T.blue}44`}} alt=""/>
+                :<div style={{width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${T.blue},${T.blue}88)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:20,fontWeight:700}}>{currentUser.name[0].toUpperCase()}</div>}
+              {currentUser.verified&&<div style={{position:"absolute",bottom:-2,right:-2,width:16,height:16,borderRadius:"50%",background:T.green,border:`2px solid ${T.bg1}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:900}}>✓</div>}
             </div>
-            <div style={{color:T.sub,fontSize:11,marginTop:2}}>{currentUser.genre||"Artist"}{currentUser.country?` · ${currentUser.country}`:""}</div>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <h2 style={{color:T.text,fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:800}}>{currentUser.name}</h2>
+                {currentUser.verified&&<span style={{background:`${T.green}20`,color:T.green,fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:20,letterSpacing:.5}}>VERIFIED</span>}
+              </div>
+              <p style={{color:T.mute,fontSize:11}}>{currentUser.genre||"Artist"}{currentUser.country?` · ${currentUser.country}`:""}</p>
+            </div>
           </div>
+          <button onClick={onClose} style={{background:`${T.mute}18`,border:"none",color:T.mute,width:32,height:32,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>✕</button>
         </div>
-        {/* Tabs */}
-        <div style={{display:"flex",gap:2,overflowX:"auto"}}>
+        {/* Tab bar */}
+        <div style={{display:"flex",gap:0,overflowX:"auto"}}>
           {TABS.map(([k,l])=>(
-            <button key={k} style={{whiteSpace:"nowrap",padding:"11px 16px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:tab===k?T.text:T.sub,position:"relative",fontFamily:"'DM Sans',sans-serif",letterSpacing:.2,transition:"color .15s"}} onClick={()=>setTab(k)}>
-              {l}
-              {tab===k&&<div style={{position:"absolute",bottom:0,left:12,right:12,height:2,background:T.gold,borderRadius:2}}/>}
-            </button>
+            <button key={k} style={{whiteSpace:"nowrap",padding:"10px 16px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:tab===k?T.blue:T.sub,borderBottom:tab===k?`2px solid ${T.blue}`:"2px solid transparent",marginBottom:-1,fontFamily:"'DM Sans',sans-serif",letterSpacing:.2,transition:"color .15s"}} onClick={()=>setTab(k)}>{l}</button>
           ))}
         </div>
       </div>
 
-      <div style={{padding:"22px 26px",maxHeight:"66vh",overflowY:"auto",background:T.bg}}>
+      <div style={{padding:"22px 24px",maxHeight:"65vh",overflowY:"auto"}}>
+
+        {/* ── OVERVIEW ── */}
         {tab==="overview"&&<>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:18}}>
-            {[["Total Plays",fmtNum(totalPlays),T.blue],["Total Likes",fmtNum(totalLikes),T.red],["Published",approved.length,T.green],["Followers",fmtNum(currentUser.followers||0),T.gold]].map(([lbl,val,col])=>(
-              <div key={lbl} style={{background:`linear-gradient(155deg, ${T.bg2} 0%, ${T.bg1} 100%)`,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 16px",position:"relative",overflow:"hidden"}}>
-                <div style={{position:"absolute",top:0,left:0,width:"100%",height:2,background:`linear-gradient(90deg, ${col}, transparent)`}}/>
-                <div style={{color:T.text,fontSize:25,fontWeight:800,fontFamily:"'Syne',sans-serif",letterSpacing:-.5}}>{val}</div>
-                <div style={{color:T.sub,fontSize:11,marginTop:4,letterSpacing:.3}}>{lbl}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:20}}>
+            {[
+              [T.blue,"🎵","Total Plays",fmtNum(totalPlays)],
+              [T.orange,"♥","Total Likes",fmtNum(totalLikes)],
+              [T.green,"✓","Published",approved.length],
+              [T.purple,"👥","Followers",fmtNum(currentUser.followers||0)],
+            ].map(([col,icon,lbl,val])=>(
+              <div key={lbl} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 14px",position:"relative",overflow:"hidden"}}>
+                <div style={{position:"absolute",top:10,right:12,fontSize:20,opacity:.15}}>{icon}</div>
+                <div style={{color:col,fontSize:26,fontWeight:800,fontFamily:"'Syne',sans-serif",lineHeight:1}}>{val}</div>
+                <div style={{color:T.mute,fontSize:11,marginTop:4,letterSpacing:.3}}>{lbl}</div>
               </div>
             ))}
           </div>
           {approved.length>0&&(()=>{const top=[...approved].sort((a,b)=>b.plays-a.plays)[0];return(
-            <div style={{background:`linear-gradient(135deg, ${T.goldDim} 0%, ${T.bg2} 65%)`,border:`1px solid ${T.goldBorder}`,borderRadius:14,padding:"15px 16px",marginBottom:14,display:"flex",gap:13,alignItems:"center"}}>
-              <div style={{position:"relative",flexShrink:0}}>
-                <img src={top.cover} alt="" style={{width:48,height:48,borderRadius:8,objectFit:"cover",boxShadow:"0 6px 16px rgba(0,0,0,.4)"}}/>
-                <div style={{position:"absolute",top:-6,left:-6,width:18,height:18,borderRadius:"50%",background:T.gold,color:"#211705",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,boxShadow:"0 2px 6px rgba(0,0,0,.5)"}}>★</div>
-              </div>
+            <div style={{background:`linear-gradient(135deg,${T.blue}12,${T.blue}06)`,border:`1px solid ${T.blueBorder}`,borderRadius:12,padding:"14px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"center"}}>
+              <img src={top.cover} alt="" style={{width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0,boxShadow:`0 4px 12px rgba(0,0,0,.4)`}}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:T.gold,fontSize:9,fontWeight:700,letterSpacing:1.4,marginBottom:3,textTransform:"uppercase"}}>Top Track</div>
+                <div style={{color:T.blue,fontSize:9,fontWeight:800,letterSpacing:1,marginBottom:3}}>🏆 TOP TRACK</div>
                 <div style={{color:T.text,fontSize:14,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{top.title}</div>
-                <div style={{color:T.sub,fontSize:11,marginTop:1}}>{fmtNum(top.plays)} plays · {fmtNum(top.likes)} likes</div>
+                <div style={{color:T.sub,fontSize:11,marginTop:2}}>{fmtNum(top.plays)} plays · {fmtNum(top.likes)} likes</div>
               </div>
             </div>
           );})()}
-          {pending.length>0&&<div style={{background:T.bg2,border:`1px solid ${T.border2}`,borderLeft:`3px solid ${T.gold}`,borderRadius:10,padding:"13px 16px"}}>
-            <p style={{color:T.text,fontSize:12,fontWeight:600}}>{pending.length} track{pending.length>1?"s":""} pending review</p>
-            <p style={{color:T.sub,fontSize:11,marginTop:2}}>Usually approved within 24 hours.</p>
+          {pending.length>0&&<div style={{background:`${T.orange}0D`,border:`1px solid ${T.orangeBorder}`,borderRadius:12,padding:"14px 16px",display:"flex",gap:10,alignItems:"center"}}>
+            <span style={{fontSize:20}}>⏳</span>
+            <div>
+              <p style={{color:T.orange,fontSize:13,fontWeight:700}}>{pending.length} track{pending.length>1?"s":""} pending review</p>
+              <p style={{color:T.sub,fontSize:11,marginTop:2}}>Usually approved within 24 hours after payment confirmation.</p>
+            </div>
           </div>}
-          {artistSongs.length===0&&<EmptyState title="No tracks yet" sub="Upload your first track to see analytics."/>}
+          {artistSongs.length===0&&<EmptyState title="No tracks yet" sub="Upload your first track to start your journey on MW Play."/>}
         </>}
 
+        {/* ── TRACKS ── */}
         {tab==="uploads"&&(artistSongs.length===0
-          ?<EmptyState title="No uploads yet" sub="Your tracks will appear here."/>
-          :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          ?<EmptyState title="No uploads yet" sub="Your tracks will appear here once uploaded."/>
+          :<div style={{display:"flex",flexDirection:"column",gap:8}}>
             {artistSongs.map(s=>(
               <div key={s.id}>
-                <div style={{display:"flex",gap:12,alignItems:"center",background:T.bg2,border:`1px solid ${editSong?.id===s.id?T.goldBorder:T.border}`,borderRadius:12,padding:"11px 14px",transition:"border-color .15s"}}>
-                  <img src={s.cover} alt="" style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0,boxShadow:"0 4px 10px rgba(0,0,0,.35)"}}/>
+                <div style={{display:"flex",gap:10,alignItems:"center",background:T.bg2,border:`1px solid ${editSong?.id===s.id?T.blueBorder:T.border}`,borderRadius:10,padding:"10px 14px",transition:"border-color .15s"}}>
+                  <img src={s.cover} alt="" style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:T.text,fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
-                    <div style={{color:T.sub,fontSize:11,marginTop:1}}>{s.genre} · {new Date(s.uploadedAt||s.release||Date.now()).toLocaleDateString()}</div>
+                    <div style={{color:T.text,fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
+                    <div style={{color:T.mute,fontSize:10,marginTop:2}}>{s.genre} · {new Date(s.uploadedAt||s.release||Date.now()).toLocaleDateString()}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
+                      <span style={{background:`${sColor[s.status]||T.mute}18`,color:sColor[s.status]||T.mute,fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:20,letterSpacing:.4}}>{s.status?.toUpperCase()}</span>
+                      <span style={{color:T.mute,fontSize:10}}>{fmtNum(s.plays)} plays</span>
+                      <span style={{color:T.mute,fontSize:10}}>{fmtNum(s.likes)} ♥</span>
+                    </div>
                   </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{color:T.mute,fontSize:11,marginBottom:4}}>{fmtNum(s.plays)} plays · {fmtNum(s.likes)} ♥</div>
-                    <span style={{padding:"3px 10px",borderRadius:20,fontSize:9.5,fontWeight:700,letterSpacing:.3,background:`${sColor[s.status]||T.mute}1c`,color:sColor[s.status]||T.mute,border:`1px solid ${sColor[s.status]||T.mute}40`}}>{s.status}</span>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                    <button style={{background:"none",border:`1px solid ${T.border2}`,borderRadius:6,color:T.sub,fontSize:10,fontWeight:700,cursor:"pointer",padding:"4px 9px",fontFamily:"'DM Sans',sans-serif"}}
-                      onClick={()=>{
-                        if(editSong?.id===s.id){setEditSong(null);}
-                        else{setEditSong(s);setEditTitle(s.title);setEditGenre(s.genre||"Afrobeat");}
-                      }}>
-                      {editSong?.id===s.id?"Close":"Edit"}
+                  <div style={{display:"flex",gap:6,flexShrink:0}}>
+                    <button style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:7,color:T.sub,fontSize:11,fontWeight:600,cursor:"pointer",padding:"5px 10px",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}
+                      onClick={()=>{if(editSong?.id===s.id){setEditSong(null);}else{setEditSong(s);setEditTitle(s.title);setEditGenre(s.genre||"Afrobeat");}}}>
+                      {editSong?.id===s.id?"✕":"Edit"}
                     </button>
-                    <button style={{background:"none",border:`1px solid ${T.redBorder}`,borderRadius:6,color:T.red,fontSize:10,fontWeight:700,cursor:"pointer",padding:"4px 9px",fontFamily:"'DM Sans',sans-serif"}}
+                    <button style={{background:"transparent",border:`1px solid ${T.redBorder}`,borderRadius:7,color:T.red,fontSize:11,fontWeight:600,cursor:"pointer",padding:"5px 10px",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}
                       onClick={async()=>{
                         if(!window.confirm(`Delete "${s.title}"? This cannot be undone.`))return;
-                        onUpdateUser&&onUpdateUser(currentUser); // keep user in sync
-                        // Remove from local state via parent's setSongs
                         if(isSupabaseReady){
-                          try{
-                            await supabase.from('songs').delete().eq('id',s.id).eq('artist_id',currentUser.id);
-                          }catch(e){toast("Delete failed: "+e.message,"error");return;}
+                          try{await supabase.from('songs').delete().eq('id',s.id).eq('artist_id',currentUser.id);}
+                          catch(e){toast("Delete failed: "+e.message,"error");return;}
                         }
-                        // Signal parent to remove this song
                         window.__mwDeleteSong&&window.__mwDeleteSong(s.id);
                         toast(`"${s.title}" deleted`,"info");
                         if(editSong?.id===s.id)setEditSong(null);
-                      }}>
-                      Delete
-                    </button>
+                      }}>Delete</button>
                   </div>
                 </div>
                 {editSong?.id===s.id&&(
-                  <div style={{background:T.bg1,border:`1px solid ${T.goldBorder}`,borderRadius:"0 0 12px 12px",padding:"16px 14px",marginTop:-1}}>
-                    <Field label="Track title">
-                      <input style={inp()} value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="Track title"/>
-                    </Field>
+                  <div style={{background:T.bg1,border:`1px solid ${T.blueBorder}`,borderTop:"none",borderRadius:"0 0 10px 10px",padding:"16px 14px"}}>
+                    <Field label="Track title"><input style={inp()} value={editTitle} onChange={e=>setEditTitle(e.target.value)} placeholder="Track title"/></Field>
                     <Field label="Genre">
                       <select style={inp()} value={editGenre} onChange={e=>setEditGenre(e.target.value)}>
                         {GENRES.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
                       </select>
                     </Field>
-                    <Btn loading={savingSong} color={T.gold} onClick={async()=>{
+                    <Btn loading={savingSong} onClick={async()=>{
                       if(!editTitle.trim()){toast("Title can't be empty","error");return;}
                       setSavingSong(true);
                       try{
-                        if(isSupabaseReady){
-                          const {error}=await supabase.from('songs').update({title:editTitle.trim(),genre:editGenre}).eq('id',s.id).eq('artist_id',currentUser.id);
-                          if(error)throw error;
-                        }
+                        if(isSupabaseReady){const {error}=await supabase.from('songs').update({title:editTitle.trim(),genre:editGenre}).eq('id',s.id).eq('artist_id',currentUser.id);if(error)throw error;}
                         window.__mwUpdateSong&&window.__mwUpdateSong(s.id,{title:editTitle.trim(),genre:editGenre});
-                        toast("Track updated!","success");
-                        setEditSong(null);
+                        toast("Track updated!","success");setEditSong(null);
                       }catch(e){toast("Update failed: "+e.message,"error");}
                       finally{setSavingSong(false);}
-                    }}>Save track</Btn>
+                    }}>Save Changes</Btn>
                   </div>
                 )}
               </div>
@@ -1851,142 +1865,146 @@ function ArtistDashboard({onClose,currentUser,songs,onUpdateUser,toast,onVerify,
           </div>
         )}
 
+        {/* ── ANALYTICS ── */}
         {tab==="analytics"&&(approved.length===0
-          ?<EmptyState title="No analytics yet" sub="Analytics appear once tracks are approved."/>
+          ?<EmptyState title="No analytics yet" sub="Analytics appear once your tracks are approved."/>
           :<>
-            <h3 style={{color:T.sub,fontSize:10,fontWeight:700,letterSpacing:1.5,marginBottom:16,textTransform:"uppercase"}}>Plays per track</h3>
-            <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:24}}>
-              {[...approved].sort((a,b)=>b.plays-a.plays).map((s,i)=>(
-                <div key={s.id} style={{display:"flex",alignItems:"center",gap:12}}>
-                  <div style={{width:18,textAlign:"center",color:i===0?T.gold:T.mute,fontSize:13,fontWeight:800,fontFamily:"'Syne',sans-serif",flexShrink:0}}>{i+1}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                      <span style={{color:T.text,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:200}}>{s.title}</span>
-                      <span style={{color:T.mute,fontSize:11,flexShrink:0,marginLeft:8}}>{fmtNum(s.plays)}</span>
-                    </div>
-                    <div style={{height:5,background:T.border,borderRadius:3,overflow:"hidden"}}>
-                      <div style={{height:"100%",background:i===0?`linear-gradient(90deg,${T.gold},${T.goldSoft})`:`linear-gradient(90deg,${T.blue},${T.purple})`,borderRadius:3,width:`${Math.max((s.plays/maxPlays)*100,2)}%`,transition:"width .6s ease"}}/>
+            <div style={{marginBottom:24}}>
+              <p style={{color:T.mute,fontSize:10,fontWeight:700,letterSpacing:1,marginBottom:14}}>PLAYS PER TRACK</p>
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                {[...approved].sort((a,b)=>b.plays-a.plays).map((s,i)=>(
+                  <div key={s.id}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                      <img src={s.cover} alt="" style={{width:32,height:32,borderRadius:5,objectFit:"cover",flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70%"}}>{s.title}</span>
+                          <span style={{color:T.sub,fontSize:11,fontFamily:"'DM Mono',monospace"}}>{fmtNum(s.plays)}</span>
+                        </div>
+                        <div style={{height:4,background:T.border,borderRadius:2,marginTop:5,overflow:"hidden"}}>
+                          <div style={{height:"100%",background:i===0?`linear-gradient(90deg,${T.blue},${T.green})`:`linear-gradient(90deg,${T.blue}88,${T.blue}44)`,borderRadius:2,width:`${Math.max((s.plays/maxPlays)*100,2)}%`,transition:"width .8s cubic-bezier(0.4,0,0.2,1)"}}/>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {[["Avg plays/track",Math.round(totalPlays/Math.max(approved.length,1))],["Total tracks",approved.length],["Total likes",totalLikes]].map(([l,v])=>(
+                <div key={l} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
+                  <div style={{color:T.text,fontSize:18,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>{fmtNum(v)}</div>
+                  <div style={{color:T.mute,fontSize:10,marginTop:3}}>{l}</div>
                 </div>
               ))}
             </div>
           </>
         )}
 
+        {/* ── PROFILE ── */}
         {tab==="editprofile"&&<>
-          <div style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:14,padding:18,marginBottom:16}}>
-            <Field label="Profile photo">
-              <label style={{display:"flex",gap:14,alignItems:"center",cursor:"pointer"}}>
-                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
-                  const f=e.target.files[0];
-                  if(f){const r=new FileReader();r.onload=ev=>setAvatar(ev.target.result);r.readAsDataURL(f);}
-                }}/>
-                {avatar?<img src={avatar} style={{width:58,height:58,borderRadius:"50%",objectFit:"cover",border:`2px solid ${T.goldBorder}`}} alt=""/>
-                  :<div style={{width:58,height:58,borderRadius:"50%",background:T.goldDim,border:`1px solid ${T.goldBorder}`,display:"flex",alignItems:"center",justifyContent:"center",color:T.gold,fontSize:20,fontWeight:700,fontFamily:"'Syne',sans-serif"}}>{currentUser.name[0].toUpperCase()}</div>}
-                <span style={{color:T.gold,fontSize:12,fontWeight:600}}>Change photo</span>
-              </label>
-            </Field>
-            <Field label="Bio"><textarea style={{...inp(),height:88,resize:"none"}} value={bio} onChange={e=>setBio(e.target.value)} placeholder="Tell listeners about yourself..."/></Field>
-            <Field label="Genre">
-              <select style={inp()} value={genre} onChange={e=>setGenre(e.target.value)}>
-                {GENRES.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Country">
-              <input style={inp()} value={country} onChange={e=>setCountry(e.target.value)} placeholder="e.g. Malawi, Kenya, Nigeria..."/>
-            </Field>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
+            <label style={{position:"relative",cursor:"pointer"}}>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>setAvatar(ev.target.result);r.readAsDataURL(f);}}}/>
+              {avatar?<img src={avatar} style={{width:80,height:80,borderRadius:"50%",objectFit:"cover",border:`3px solid ${T.blue}44`}} alt=""/>
+                :<div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${T.blue},${T.blue}66)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:28,fontWeight:800}}>{currentUser.name[0].toUpperCase()}</div>}
+              <div style={{position:"absolute",bottom:2,right:2,width:24,height:24,borderRadius:"50%",background:T.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,boxShadow:`0 2px 8px ${T.bg}`}}>📷</div>
+            </label>
           </div>
-          <Btn full color={T.gold} onClick={async()=>{
+          <Field label="Bio"><textarea style={{...inp(),height:88,resize:"none"}} value={bio} onChange={e=>setBio(e.target.value)} placeholder="Tell listeners about yourself and your music..."/></Field>
+          <Field label="Genre">
+            <select style={inp()} value={genre} onChange={e=>setGenre(e.target.value)}>
+              {GENRES.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Country"><input style={inp()} value={country} onChange={e=>setCountry(e.target.value)} placeholder="e.g. Malawi, South Africa, Nigeria…"/></Field>
+          <Btn full onClick={async()=>{
             let avatarUrl=avatar;
             if(isSupabaseReady&&avatar&&avatar.startsWith("data:")){
-              try{
-                const blob=dataUrlToBlob(avatar);
-                avatarUrl=await uploadFile("avatars",`${currentUser.id}/avatar.jpg`,blob);
-              }catch(e){toast("Photo upload failed, saving other changes","error");}
+              try{const blob=dataUrlToBlob(avatar);avatarUrl=await uploadFile("avatars",`${currentUser.id}/avatar.jpg`,blob);}
+              catch(e){toast("Photo upload failed, saving other changes","error");}
             }
             const updated={...currentUser,bio,genre,country,avatar:avatarUrl};
             onUpdateUser(updated);
             if(isSupabaseReady){
-              supabase.rpc('update_own_profile',{
-                user_id:currentUser.id,
-                new_bio:bio||"",
-                new_avatar:avatarUrl||"",
-                new_genre:genre||"",
-                new_country:country||"",
-              }).then(()=>onRefresh&&onRefresh()).catch(()=>{});
+              supabase.rpc('update_own_profile',{user_id:currentUser.id,new_bio:bio||"",new_avatar:avatarUrl||"",new_genre:genre||"",new_country:country||""})
+                .then(()=>onRefresh&&onRefresh()).catch(()=>{});
             }
-            toast("Profile updated!","success");
-            onClose();
+            toast("Profile updated!","success");onClose();
           }}>Save Changes</Btn>
         </>}
 
-        {tab==="verify"&&<>
-          {currentUser.verified
-            ?<div style={{textAlign:"center",padding:"34px 0"}}>
-              <div style={{width:62,height:62,borderRadius:"50%",background:T.goldDim,border:`1.5px solid ${T.goldBorder}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:24,color:T.gold,fontWeight:800}}>✓</div>
-              <p style={{color:T.gold,fontSize:16,fontWeight:700,marginBottom:6,fontFamily:"'Syne',sans-serif"}}>You're verified</p>
-              <p style={{color:T.sub,fontSize:12}}>Your verified badge is showing on your profile.</p>
+        {/* ── VERIFY ── */}
+        {tab==="verify"&&(
+          currentUser.verified
+            ?<div style={{textAlign:"center",padding:"32px 0"}}>
+              <div style={{width:72,height:72,borderRadius:"50%",background:`${T.green}15`,border:`2px solid ${T.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:32}}>🏅</div>
+              <p style={{color:T.green,fontSize:18,fontWeight:800,fontFamily:"'Syne',sans-serif",marginBottom:6}}>You're Verified!</p>
+              <p style={{color:T.sub,fontSize:12}}>Your verified badge is live on your profile and songs.</p>
             </div>
             :verificationStatus==="Pending"
-            ?<div style={{textAlign:"center",padding:"34px 0"}}>
-              <div style={{fontSize:34,marginBottom:14}}>⏳</div>
-              <p style={{color:T.orange,fontSize:14,fontWeight:600,marginBottom:6}}>Verification pending</p>
-              <p style={{color:T.sub,fontSize:12,lineHeight:1.6}}>Your request is under review. We'll notify you within 3–5 business days.</p>
+            ?<div style={{textAlign:"center",padding:"32px 0"}}>
+              <div style={{width:72,height:72,borderRadius:"50%",background:`${T.orange}15`,border:`2px solid ${T.orangeBorder}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:32}}>⏳</div>
+              <p style={{color:T.orange,fontSize:16,fontWeight:700,marginBottom:6}}>Under Review</p>
+              <p style={{color:T.sub,fontSize:12,lineHeight:1.7}}>Your verification request is being reviewed. We'll notify you within 3–5 business days.</p>
             </div>
             :<>
-              <div style={{background:T.goldDim,border:`1px solid ${T.goldBorder}`,borderRadius:12,padding:"14px 16px",marginBottom:18}}>
-                <p style={{color:T.sub,fontSize:12,lineHeight:1.7}}>Get a <strong style={{color:T.gold}}>verified badge</strong> ✓ to confirm you're the real artist. Increases trust and discoverability.</p>
+              <div style={{background:`linear-gradient(135deg,${T.blue}0E,transparent)`,border:`1px solid ${T.blueBorder}`,borderRadius:12,padding:"16px",marginBottom:20,textAlign:"center"}}>
+                <div style={{fontSize:32,marginBottom:8}}>✓</div>
+                <p style={{color:T.text,fontSize:14,fontWeight:700,marginBottom:4}}>Get Verified on MW Play</p>
+                <p style={{color:T.sub,fontSize:12,lineHeight:1.6}}>Confirm you're the real artist and unlock exclusive features.</p>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-                {["Gold verified badge on your profile","Priority placement in search","Access to advanced analytics","Future monetization features"].map(b=>(
-                  <div key={b} style={{display:"flex",gap:9,alignItems:"center"}}><span style={{color:T.gold,fontSize:12}}>✓</span><span style={{color:T.sub,fontSize:12}}>{b}</span></div>
+                {[["✓ Blue verified badge","Shows on your profile and all your songs"],["✓ Priority in search","Appear higher in artist search results"],["✓ Advanced analytics","Detailed play and download insights"],["✓ Monetization","Access to future revenue features"]].map(([title,sub])=>(
+                  <div key={title} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 14px",background:T.bg2,border:`1px solid ${T.border}`,borderRadius:8}}>
+                    <span style={{color:T.green,fontSize:12,fontWeight:800,marginTop:1}}>{title.split(" ")[0]}</span>
+                    <div><div style={{color:T.text,fontSize:12,fontWeight:600}}>{title.slice(2)}</div><div style={{color:T.mute,fontSize:11,marginTop:2}}>{sub}</div></div>
+                  </div>
                 ))}
               </div>
-              <Btn full color={T.gold} onClick={()=>{onClose();setTimeout(()=>onVerify&&onVerify(),100);}}>Apply for Verification →</Btn>
-            </>}
-        </>}
+              <Btn full color={T.blue} onClick={()=>{onClose();setTimeout(()=>onVerify&&onVerify(),100);}}>Apply for Verification →</Btn>
+            </>
+        )}
 
+        {/* ── REVENUE ── */}
         {tab==="revenue"&&<>
-          {/* Summary cards */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:22}}>
             {[
-              ["Total Earned",`MWK ${fmtNum(revenueData.reduce((a,d)=>a+(d.amount||0),0))}`,T.gold],
-              ["Downloads",fmtNum(revenueData.length),T.blue],
-              ["This Month",`MWK ${fmtNum(revenueData.filter(d=>new Date(d.created_at)>new Date(Date.now()-30*24*60*60*1000)).reduce((a,d)=>a+(d.amount||0),0))}`,T.green],
-              ["Per Download","MWK 500",T.purple],
-            ].map(([lbl,val,col])=>(
-              <div key={lbl} style={{background:`linear-gradient(155deg, ${T.bg2} 0%, ${T.bg1} 100%)`,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
-                <div style={{color:T.mute,fontSize:10,letterSpacing:.6,marginBottom:5,textTransform:"uppercase"}}>{lbl}</div>
-                <div style={{color:col,fontSize:17,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>{val}</div>
+              [T.green,"💰","Total Earned",`MWK ${fmtNum(revenueData.reduce((a,d)=>a+(d.amount||0),0))}`],
+              [T.blue,"⬇","Downloads",fmtNum(revenueData.length)],
+              [T.orange,"📅","This Month",`MWK ${fmtNum(revenueData.filter(d=>new Date(d.created_at)>new Date(Date.now()-30*24*60*60*1000)).reduce((a,d)=>a+(d.amount||0),0))}`],
+              [T.purple,"🎵","Rate","MWK 500/dl"],
+            ].map(([col,icon,lbl,val])=>(
+              <div key={lbl} style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 14px",position:"relative",overflow:"hidden"}}>
+                <div style={{position:"absolute",top:10,right:12,fontSize:18,opacity:.15}}>{icon}</div>
+                <div style={{color:col,fontSize:20,fontWeight:800,fontFamily:"'Syne',sans-serif"}}>{val}</div>
+                <div style={{color:T.mute,fontSize:10,marginTop:4,letterSpacing:.3}}>{lbl}</div>
               </div>
             ))}
           </div>
-
-          {/* Download history */}
-          <h4 style={{color:T.sub,fontSize:10,fontWeight:700,letterSpacing:1.5,marginBottom:12,textTransform:"uppercase"}}>Recent downloads</h4>
+          <p style={{color:T.mute,fontSize:10,fontWeight:700,letterSpacing:1,marginBottom:12}}>DOWNLOAD HISTORY</p>
           {revenueData.length===0
-            ?<div style={{textAlign:"center",padding:"28px 0"}}>
-              <div style={{fontSize:32,marginBottom:8}}>💸</div>
-              <p style={{color:T.mute,fontSize:12}}>No downloads yet. Share your music to get downloads!</p>
+            ?<div style={{textAlign:"center",padding:"32px 0"}}>
+              <div style={{fontSize:36,marginBottom:8,opacity:.4}}>💸</div>
+              <p style={{color:T.mute,fontSize:13}}>No downloads yet</p>
+              <p style={{color:T.mute,fontSize:11,marginTop:4}}>Share your music on WhatsApp to get downloads!</p>
             </div>
-            :<div style={{background:T.bg2,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
-              {recentDownloads.map((d,i)=>{
-                const song=artistSongs.find(s=>s.id===d.song_id);
-                return(
-                  <div key={d.id} style={{display:"flex",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:i<recentDownloads.length-1?`1px solid ${T.border}`:"none"}}>
-                    {song?.cover&&<img src={song.cover} alt="" style={{width:38,height:38,borderRadius:6,objectFit:"cover",flexShrink:0}}/>}
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{song?.title||"Unknown track"}</div>
-                      <div style={{color:T.mute,fontSize:10,marginTop:1}}>{new Date(d.created_at).toLocaleDateString()}</div>
-                    </div>
-                    <div style={{color:T.gold,fontSize:12,fontWeight:700,flexShrink:0,fontFamily:"'Syne',sans-serif"}}>+MWK {d.amount||500}</div>
+            :revenueData.slice(0,20).map(d=>{
+              const song=artistSongs.find(s=>s.id===d.song_id);
+              return(
+                <div key={d.id} style={{display:"flex",gap:10,alignItems:"center",padding:"10px 14px",background:T.bg2,border:`1px solid ${T.border}`,borderRadius:10,marginBottom:6}}>
+                  {song?.cover?<img src={song.cover} alt="" style={{width:38,height:38,borderRadius:6,objectFit:"cover",flexShrink:0}}/>:<div style={{width:38,height:38,borderRadius:6,background:T.border,flexShrink:0}}/>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:T.text,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{song?.title||"Unknown track"}</div>
+                    <div style={{color:T.mute,fontSize:10,marginTop:2}}>{new Date(d.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
                   </div>
-                );
-              })}
-            </div>
+                  <div style={{color:T.green,fontSize:13,fontWeight:700,flexShrink:0}}>+MWK {d.amount||500}</div>
+                </div>
+              );
+            })
           }
         </>}
+
       </div>
     </Modal>
   );
@@ -2388,6 +2406,13 @@ export default function MWPlay(){
         }
         if(payload.eventType==="UPDATE"){
           const ns=songFromDb(payload.new);
+          // Push notification when artist's song gets approved
+          if(payload.new.status==="Approved"&&payload.old.status!=="Approved"){
+            const cu=LS.get("currentUser",null);
+            if(cu?.id===payload.new.artist_id){
+              sendPushNotif("🎵 Track Approved!",`"${payload.new.title}" is now live on MW Play!`);
+            }
+          }
           return ss.map(s=>s.id===ns.id?{...s,...ns}:s);
         }
         if(payload.eventType==="DELETE")return ss.filter(s=>s.id!==payload.old.id);
@@ -2872,6 +2897,13 @@ export default function MWPlay(){
                     🔔 Notifications {unread>0&&<span style={{background:T.red,color:"#fff",fontSize:10,fontWeight:700,padding:"0 5px",borderRadius:20,marginLeft:6}}>{unread}</span>}
                   </BtnGhost>
                   {isAdmin&&<BtnGhost onClick={()=>setModal("admin")} style={{padding:10,fontSize:11,color:T.mute}}>⚙ Admin Panel</BtnGhost>}
+                  {"Notification" in window && Notification.permission !== "granted" && (
+                    <button style={{background:"none",border:`1px solid ${T.blue}44`,borderRadius:8,padding:"10px 18px",fontSize:12,fontWeight:600,cursor:"pointer",color:T.blue,fontFamily:"'DM Sans',sans-serif",marginBottom:8}} onClick={async()=>{
+                      const ok=await requestNotifPermission();
+                      if(ok)toast("Notifications enabled! 🔔","success");
+                      else toast("Notifications blocked — enable in browser settings","error");
+                    }}>🔔 Enable Notifications</button>
+                  )}
                   <button style={{background:"none",border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 18px",fontSize:12,fontWeight:600,cursor:"pointer",color:T.mute,fontFamily:"'DM Sans',sans-serif"}} onClick={async()=>{if(audioRef.current){audioRef.current.pause();audioRef.current.src="";}try{await authSignOut();}catch(e){}setCurrentUser(null);setPage("home");setCurrentSong(null);setIsPlaying(false);toast("Signed out");}}>Sign out</button>
                 </div>
               </>:<EmptyState title="Not signed in" sub="Sign in or create an account." onCTA={()=>setModal("login")} ctaLabel="Sign in"/>}
