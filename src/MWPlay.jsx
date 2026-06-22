@@ -2525,9 +2525,24 @@ export default function MWPlay(){
   useEffect(()=>{
     if(!currentSong)return;
     if(currentSong.audioUrl){
-      if(!audioRef.current)audioRef.current=new Audio();
-      if(audioRef.current.src!==currentSong.audioUrl){audioRef.current.src=currentSong.audioUrl;audioRef.current.volume=volume;setProgress(0);}
-      if(isPlaying)audioRef.current.play().catch(()=>{});
+      if(!audioRef.current){
+        audioRef.current=new Audio();
+        audioRef.current.crossOrigin="anonymous";
+        audioRef.current.preload="auto";
+      }
+      if(audioRef.current.src!==currentSong.audioUrl){
+        audioRef.current.src=currentSong.audioUrl;
+        audioRef.current.crossOrigin="anonymous";
+        audioRef.current.load();
+        audioRef.current.volume=volume;
+        setProgress(0);
+      }
+      if(isPlaying)audioRef.current.play().catch(e=>{
+        console.warn("Play failed:",e);
+        // Try reloading the source and playing again
+        audioRef.current.load();
+        audioRef.current.play().catch(()=>{});
+      });
       else audioRef.current.pause();
     }
   },[currentSong,isPlaying]);
